@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mandelbrot Explorer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #0f0f23, #1a1a3a);
+            font-family: 'Courier New', monospace;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            padding: 8px 15px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mobile-toggle {
+            display: none;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-toggle {
+                display: block;
+            }
+            
+            .controls {
+                display: none;
+                flex-direction: column;
+                gap: 15px;
+                width: 100%;
+                padding-top: 10px;
+                border-top: 1px solid #555;
+            }
+            
+            .controls.show {
+                display: flex;
+            }
+            
+            .control-group {
+                justify-content: space-between;
+                width: 100%;
+            }
+            
+            .control-group input, .control-group select {
+                min-width: 120px;
+            }
+            
+            .title {
+                font-size: 18px;
+            }
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .control-group input, .control-group select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #555;
+            color: #fff;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 107, 107, 0.5);
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+            transition: transform 0.1s ease;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 12px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid #333;
+            font-size: 11px;
+            max-width: 250px;
+        }
+
+        @media (max-width: 768px) {
+            .info-panel {
+                position: relative;
+                top: 0;
+                left: 0;
+                margin: 10px;
+                max-width: none;
+                font-size: 12px;
+            }
+        }
+
+        .info-panel h3 {
+            margin: 0 0 10px 0;
+            color: #00ffff;
+        }
+
+        .coordinates {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: monospace;
+        }
+
+        @media (max-width: 768px) {
+            .coordinates {
+                bottom: 5px;
+                right: 5px;
+                font-size: 10px;
+                padding: 6px;
+            }
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ffff;
+            font-size: 18px;
+            z-index: 200;
+        }
+
+        .spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #00ffff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <div class="title">🌀 Mandelbrot Explorer</div>
+                <button class="mobile-toggle" onclick="toggleControls()">⚙️ Einstellungen</button>
+            </div>
+            <div class="controls" id="controls">
+                <div class="control-group">
+                    <label>Iterationen:</label>
+                    <div>
+                        <input type="range" id="iterations" min="50" max="500" value="100">
+                        <span id="iterValue">100</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Farbschema:</label>
+                    <select id="colorScheme">
+                        <option value="rainbow">Regenbogen</option>
+                        <option value="fire">Feuer</option>
+                        <option value="ocean">Ozean</option>
+                        <option value="purple">Lila</option>
+                        <option value="classic">Klassisch</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="resetView()">Reset</button>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="mandelbrotCanvas"></canvas>
+            
+            <div class="info-panel">
+                <h3>Steuerung</h3>
+                <p><strong>Tippen:</strong> Zum Punkt navigieren</p>
+                <p><strong>Pinch-Zoom:</strong> Zoom in/out</p>
+                <p><strong>Ziehen:</strong> Ansicht verschieben</p>
+                <p><strong>Doppeltipp:</strong> Starker Zoom</p>
+            </div>
+
+            <div class="coordinates">
+                <div>X: <span id="coordX">0</span></div>
+                <div>Y: <span id="coordY">0</span></div>
+                <div>Zoom: <span id="zoomLevel">1</span>x</div>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                Berechne Mandelbrot-Menge...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class MandelbrotExplorer {
+            constructor() {
+                this.canvas = document.getElementById('mandelbrotCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.canvas.width = Math.max(1, window.innerWidth);
+                this.canvas.height = Math.max(1, window.innerHeight - 60);
+                
+                // Mandelbrot-Parameter
+                this.centerX = -0.5;
+                this.centerY = 0;
+                this.zoom = 1;
+                this.maxIterations = 100;
+                this.colorScheme = 'rainbow';
+                
+                // Interaktion
+                this.isDragging = false;
+                this.lastMouseX = 0;
+                this.lastMouseY = 0;
+                
+                // Touch-Support
+                this.lastTouchDistance = 0;
+                this.lastTouchX = 0;
+                this.lastTouchY = 0;
+                
+                this.setupEventListeners();
+                this.render();
+            }
+
+            setupEventListeners() {
+                // Maus-Events
+                this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                this.canvas.addEventListener('mouseup', () => this.onMouseUp());
+                this.canvas.addEventListener('wheel', (e) => this.onWheel(e));
+                this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+                
+                // Touch-Events für Smartphone
+                this.canvas.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
+                this.canvas.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
+                this.canvas.addEventListener('touchend', (e) => this.onTouchEnd(e), { passive: false });
+                
+                // Verhindere Kontext-Menü und Zoom auf Touch-Geräten
+                this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+                this.canvas.addEventListener('gesturestart', (e) => e.preventDefault());
+                this.canvas.addEventListener('gesturechange', (e) => e.preventDefault());
+                
+                // Fenster-Resize
+                window.addEventListener('resize', () => this.onResize());
+                
+                // Kontrollen
+                document.getElementById('iterations').addEventListener('input', (e) => {
+                    this.maxIterations = parseInt(e.target.value);
+                    document.getElementById('iterValue').textContent = this.maxIterations;
+                    this.render();
+                });
+                
+                document.getElementById('colorScheme').addEventListener('change', (e) => {
+                    this.colorScheme = e.target.value;
+                    this.render();
+                });
+            }
+
+            onMouseDown(e) {
+                this.isDragging = true;
+                this.lastMouseX = e.clientX;
+                this.lastMouseY = e.clientY;
+                this.canvas.style.cursor = 'grabbing';
+            }
+
+            onMouseMove(e) {
+                if (this.isDragging) {
+                    const deltaX = e.clientX - this.lastMouseX;
+                    const deltaY = e.clientY - this.lastMouseY;
+                    
+                    const scale = 4 / (this.canvas.width * this.zoom);
+                    this.centerX -= deltaX * scale;
+                    this.centerY += deltaY * scale;
+                    
+                    this.lastMouseX = e.clientX;
+                    this.lastMouseY = e.clientY;
+                    
+                    this.render();
+                } else {
+                    this.updateCoordinates(e);
+                }
+            }
+
+            onMouseUp() {
+                this.isDragging = false;
+                this.canvas.style.cursor = 'crosshair';
+            }
+
+            onWheel(e) {
+                e.preventDefault();
+                const rect = this.canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+                
+                // Zoom zu Mausposition
+                const scale = 4 / (this.canvas.width * this.zoom);
+                const realX = this.centerX + (mouseX - this.canvas.width / 2) * scale;
+                const realY = this.centerY - (mouseY - this.canvas.height / 2) * scale;
+                
+                this.zoom *= zoomFactor;
+                
+                const newScale = 4 / (this.canvas.width * this.zoom);
+                this.centerX = realX - (mouseX - this.canvas.width / 2) * newScale;
+                this.centerY = realY + (mouseY - this.canvas.height / 2) * newScale;
+                
+                this.render();
+            }
+
+            onDoubleClick(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const scale = 4 / (this.canvas.width * this.zoom);
+                this.centerX = this.centerX + (mouseX - this.canvas.width / 2) * scale;
+                this.centerY = this.centerY - (mouseY - this.canvas.height / 2) * scale;
+                this.zoom *= 3;
+                
+                this.render();
+            }
+
+            // Touch-Event Handlers
+            onTouchStart(e) {
+                e.preventDefault();
+                
+                if (e.touches.length === 1) {
+                    // Single Touch - Navigation
+                    this.isDragging = true;
+                    this.lastTouchX = e.touches[0].clientX;
+                    this.lastTouchY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    // Pinch Zoom
+                    this.isDragging = false;
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    
+                    this.lastTouchDistance = Math.sqrt(
+                        Math.pow(touch2.clientX - touch1.clientX, 2) +
+                        Math.pow(touch2.clientY - touch1.clientY, 2)
+                    );
+                    
+                    this.lastTouchX = (touch1.clientX + touch2.clientX) / 2;
+                    this.lastTouchY = (touch1.clientY + touch2.clientY) / 2;
+                }
+            }
+
+            onTouchMove(e) {
+                e.preventDefault();
+                
+                if (e.touches.length === 1 && this.isDragging) {
+                    // Single Touch - Drag
+                    const deltaX = e.touches[0].clientX - this.lastTouchX;
+                    const deltaY = e.touches[0].clientY - this.lastTouchY;
+                    
+                    const scale = 4 / (this.canvas.width * this.zoom);
+                    this.centerX -= deltaX * scale;
+                    this.centerY += deltaY * scale;
+                    
+                    this.lastTouchX = e.touches[0].clientX;
+                    this.lastTouchY = e.touches[0].clientY;
+                    
+                    this.render();
+                } else if (e.touches.length === 2) {
+                    // Pinch Zoom
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    
+                    const distance = Math.sqrt(
+                        Math.pow(touch2.clientX - touch1.clientX, 2) +
+                        Math.pow(touch2.clientY - touch1.clientY, 2)
+                    );
+                    
+                    const centerX = (touch1.clientX + touch2.clientX) / 2;
+                    const centerY = (touch1.clientY + touch2.clientY) / 2;
+                    
+                    if (this.lastTouchDistance > 0) {
+                        const zoomFactor = distance / this.lastTouchDistance;
+                        
+                        // Zoom zum Berührungspunkt
+                        const rect = this.canvas.getBoundingClientRect();
+                        const touchX = centerX - rect.left;
+                        const touchY = centerY - rect.top;
+                        
+                        const scale = 4 / (this.canvas.width * this.zoom);
+                        const realX = this.centerX + (touchX - this.canvas.width / 2) * scale;
+                        const realY = this.centerY - (touchY - this.canvas.height / 2) * scale;
+                        
+                        this.zoom *= zoomFactor;
+                        
+                        const newScale = 4 / (this.canvas.width * this.zoom);
+                        this.centerX = realX - (touchX - this.canvas.width / 2) * newScale;
+                        this.centerY = realY + (touchY - this.canvas.height / 2) * newScale;
+                        
+                        this.render();
+                    }
+                    
+                    this.lastTouchDistance = distance;
+                    this.lastTouchX = centerX;
+                    this.lastTouchY = centerY;
+                }
+            }
+
+            onTouchEnd(e) {
+                e.preventDefault();
+                
+                if (e.touches.length === 0) {
+                    this.isDragging = false;
+                    this.lastTouchDistance = 0;
+                } else if (e.touches.length === 1) {
+                    // Zurück zu Single Touch
+                    this.isDragging = true;
+                    this.lastTouchX = e.touches[0].clientX;
+                    this.lastTouchY = e.touches[0].clientY;
+                    this.lastTouchDistance = 0;
+                }
+            }
+
+            onResize() {
+                this.canvas.width = Math.max(1, window.innerWidth);
+                this.canvas.height = Math.max(1, window.innerHeight - 60);
+                this.render();
+            }
+
+            updateCoordinates(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const scale = 4 / (this.canvas.width * this.zoom);
+                const realX = this.centerX + (mouseX - this.canvas.width / 2) * scale;
+                const realY = this.centerY - (mouseY - this.canvas.height / 2) * scale;
+                
+                document.getElementById('coordX').textContent = realX.toFixed(6);
+                document.getElementById('coordY').textContent = realY.toFixed(6);
+                document.getElementById('zoomLevel').textContent = this.zoom.toFixed(2);
+            }
+
+            mandelbrot(x, y) {
+                let real = x;
+                let imag = y;
+                let iterations = 0;
+                
+                // Optimierte Berechnung mit weniger Multiplikationen
+                let real2 = real * real;
+                let imag2 = imag * imag;
+                
+                while (iterations < this.maxIterations && real2 + imag2 <= 4) {
+                    imag = 2 * real * imag + y;
+                    real = real2 - imag2 + x;
+                    
+                    real2 = real * real;
+                    imag2 = imag * imag;
+                    iterations++;
+                }
+                
+                return { iterations, zx: real, zy: imag };
+            }
+
+            getColor(iterations, zx, zy) {
+                if (iterations === this.maxIterations) {
+                    return [0, 0, 0, 255];
+                }
+                
+                // Smooth coloring mit kontinuierlicher Iteration
+                const smoothIter = iterations + 1 - Math.log(Math.log(Math.sqrt(zx * zx + zy * zy))) / Math.log(2);
+                const t = smoothIter / this.maxIterations;
+                
+                // Sanftere Farbübergänge mit Interpolation
+                const smoothT = 0.5 + 0.5 * Math.sin(t * Math.PI * 6);
+                
+                switch (this.colorScheme) {
+                    case 'rainbow':
+                        const hue = (t * 360) % 360;
+                        return this.hslToRgb(hue, 0.8, 0.5 + 0.3 * smoothT);
+                    case 'fire':
+                        return [
+                            Math.floor(255 * Math.min(1, smoothT * 1.5)),
+                            Math.floor(255 * Math.pow(Math.max(0, smoothT - 0.3), 2)),
+                            Math.floor(255 * Math.pow(Math.max(0, smoothT - 0.7), 3)),
+                            255
+                        ];
+                    case 'ocean':
+                        return [
+                            Math.floor(255 * smoothT * 0.2),
+                            Math.floor(255 * Math.pow(smoothT, 0.8) * 0.8),
+                            Math.floor(255 * Math.pow(smoothT, 0.6)),
+                            255
+                        ];
+                    case 'purple':
+                        return [
+                            Math.floor(255 * Math.pow(smoothT, 0.7)),
+                            Math.floor(255 * smoothT * 0.4),
+                            Math.floor(255 * Math.pow(smoothT, 0.5)),
+                            255
+                        ];
+                    case 'classic':
+                        const intensity = Math.floor(255 * (1 - Math.pow(smoothT, 0.8)));
+                        return [intensity, intensity, intensity, 255];
+                    default:
+                        return [255, 255, 255, 255];
+                }
+            }
+
+            hslToRgb(h, s, l) {
+                h /= 360;
+                const c = (1 - Math.abs(2 * l - 1)) * s;
+                const x = c * (1 - Math.abs((h * 6) % 2 - 1));
+                const m = l - c / 2;
+                
+                let r, g, b;
+                if (0 <= h && h < 1/6) {
+                    r = c; g = x; b = 0;
+                } else if (1/6 <= h && h < 1/3) {
+                    r = x; g = c; b = 0;
+                } else if (1/3 <= h && h < 1/2) {
+                    r = 0; g = c; b = x;
+                } else if (1/2 <= h && h < 2/3) {
+                    r = 0; g = x; b = c;
+                } else if (2/3 <= h && h < 5/6) {
+                    r = x; g = 0; b = c;
+                } else {
+                    r = c; g = 0; b = x;
+                }
+                
+                return [
+                    Math.floor(255 * (r + m)),
+                    Math.floor(255 * (g + m)),
+                    Math.floor(255 * (b + m)),
+                    255
+                ];
+            }
+
+            render() {
+                if (this.canvas.width <= 0 || this.canvas.height <= 0) return;
+                
+                document.getElementById('loading').style.display = 'block';
+                
+                // Zurück zu synchroner Verarbeitung für bessere Performance
+                requestAnimationFrame(() => {
+                    const imageData = this.ctx.createImageData(this.canvas.width, this.canvas.height);
+                    const data = imageData.data;
+                    
+                    const scale = 4 / (this.canvas.width * this.zoom);
+                    const startX = this.centerX - (this.canvas.width / 2) * scale;
+                    const startY = this.centerY + (this.canvas.height / 2) * scale;
+                    
+                    // Optimierte einfache Schleife
+                    for (let y = 0; y < this.canvas.height; y++) {
+                        for (let x = 0; x < this.canvas.width; x++) {
+                            const realX = startX + x * scale;
+                            const realY = startY - y * scale;
+                            
+                            const result = this.mandelbrot(realX, realY);
+                            const color = this.getColor(result.iterations, result.zx, result.zy);
+                            
+                            const index = (y * this.canvas.width + x) * 4;
+                            data[index] = color[0];
+                            data[index + 1] = color[1];
+                            data[index + 2] = color[2];
+                            data[index + 3] = color[3];
+                        }
+                    }
+                    
+                    this.ctx.putImageData(imageData, 0, 0);
+                    document.getElementById('loading').style.display = 'none';
+                });
+            }
+        }
+
+        function resetView() {
+            explorer.centerX = -0.5;
+            explorer.centerY = 0;
+            explorer.zoom = 1;
+            explorer.render();
+        }
+
+        function toggleControls() {
+            const controls = document.getElementById('controls');
+            controls.classList.toggle('show');
+        }
+
+        // Initialisierung
+        let explorer;
+        window.addEventListener('load', () => {
+            explorer = new MandelbrotExplorer();
+        });
+    </script>
+</body>
+</html>
